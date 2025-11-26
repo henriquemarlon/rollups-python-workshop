@@ -10,11 +10,12 @@ rollup_server = environ["ROLLUP_HTTP_SERVER_URL"]
 logger.info(f"HTTP rollup_server url is {rollup_server}")
 
 # Portal addresses
-ERC20_PORTAL_ADDRESS = "0xc700D6aDd016eECd59d989C028214Eaa0fCC0051".lower()
 INPUT_BOX_ADDRESS = "0xc70074BDD26d8cF983Ca6A5b89b8db52D5850051".lower()
+ERC20_PORTAL_ADDRESS = "0xc700D6aDd016eECd59d989C028214Eaa0fCC0051".lower()
 
 # print(Web3.keccak(b"transfer(address,uint256)"))
-ERC20_TRANSFER_FUNCTION_SELECTOR = b'\xa9\x05\x9c\xbb*\xb0\x9e\xb2\x19X?JY\xa5\xd0b:\xde4m\x96+\xcdNF\xb1\x1d\xa0G\xc9\x04\x9b'[:4]
+ERC20_TRANSFER_FUNCTION_SELECTOR = b'\xa9\x05\x9c\xbb*\xb0\x9e\xb2\x19X?JY\xa5\xd0b:\xde4m\x96+\xcdNF\xb1\x1d\xa0G\xc9\x04\x9b'[
+    :4]
 
 
 def str2hex(string):
@@ -78,15 +79,13 @@ def handle_erc20_deposit(payload):
     """
     Process ERC20 deposit from portal and create voucher to return tokens
     Payload format from ERC20Portal:
-    - bytes 0-1: success (bool)
-    - bytes 1-21: token address
-    - bytes 21-41: depositor address
-    - bytes 41-73: amount (uint256)
-    - bytes 73+: extra data
+    - bytes 0-20: token address
+    - bytes 20-40: depositor address
+    - bytes 40-72: amount (uint256)
+    - bytes 72+: extra data
     """
     binary = hex2binary(payload)
 
-    # Parse deposit data
     token_address = binary2hex(binary[:20])
     depositor = binary2hex(binary[20:40])
     amount = int.from_bytes(binary[40:72], "big")
@@ -112,8 +111,7 @@ def handle_erc20_deposit(payload):
 
     voucher = {
         "destination": token_address,
-        # No ETH value for ERC20 transfers
-        "value": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "value": "0x0000000000000000000000000000000000000000000000000000000000000000", # No ETH value for ERC20 transfers
         "payload": voucher_payload
     }
 
@@ -136,23 +134,21 @@ def handle_advance(data):
     try:
         # Check if input came from ERC20 Portal
         if sender == ERC20_PORTAL_ADDRESS:
-            logger.info("Input from ERC20 Portal - processing deposit")
             handle_erc20_deposit(payload)
 
         # Check if input came from InputBox (regular user input)
-        else:
+        elif sender == INPUT_BOX_ADDRESS:
             logger.info(f"Input from {sender} - processing as regular input")
             try:
-                # Try to decode as string
-                payload_str = hex2str(payload)
-                logger.info(f"Received string input: {payload_str}")
-
-                notice_payload = str2hex(f"Received input: {payload_str}")
-                send_notice({"payload": notice_payload})
+                decoded_payload = hex2str(payload)
+                notice = str2hex(f"Received input: {decoded_payload}")
+                send_notice({"payload": notice})
             except Exception as e:
                 logger.info(f"Could not decode payload as string: {e}")
-                send_report(
-                    {"payload": str2hex(f"Unknown input format from {sender}")})
+                send_report({"payload": str2hex(f"Unknown input format from {sender}")})
+
+        else:
+            send_report({"payload": str2hex(f"Unknown input format from {sender}")})
 
     except Exception as e:
         status = "reject"
